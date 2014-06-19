@@ -1,11 +1,11 @@
-﻿# --------------------------------------------------------------------
+# --------------------------------------------------------------------
 # Installs FitNesse as Windows Service
 # Dependencies: Windows Resource Kit (downloads automatically)
 # This script has been tested on Windows 7 and 2008R2
 # --------------------------------------------------------------------
 param(
-[string]$serviceName = "FitNesse",
-[int]$finessePort = "8084",
+[string]$ServiceName = "FitNesse",
+[int]$FinessePort = "8084",
 [switch]$Uninstall)
 
 #Windows Resource Kit properties
@@ -27,25 +27,28 @@ if($fitnesseJar -eq $null){
 function Install-RkTools(){
     Write-Host "Downloading Windows Resource Kit installer"
     $destination = Join-Path $env:temp "rktools.exe"
-
     $webclient = New-Object System.Net.WebClient
     $webclient.Proxy.Credentials = [System.Net.CredentialCache]::DefaultNetworkCredentials
     $webclient.DownloadFile($resourceKitInstallerUrl, $destination)
     "Downloaded at $destination"
-    Start-Process $destination -Wait
+    #uncpack
+    Start-Process $destination "/T:$env:TMP /C" -Wait
+    #install
+    $msi = Join-Path $env:TMP "rktools.msi"
+    Start-Process msiexec "/qn /i $msi" -Wait
     if (-not (Test-Path $srvany)){
         throw "Windows Resource Kit wasn't installed for unknown reason. Let you try to download and install it manually"
     }
 }
 
-if (-not (Test-Path $srvany)){
+if (!(Test-Path $srvany)){
     Install-RkTools
 }
 
-if(Get-WmiObject -Class Win32_Service -Filter "Name='$serviceName'"){
+if(Get-WmiObject -Class Win32_Service -Filter "Name='$ServiceName'"){
     Write-Host "Uninstalling already installed service"
-    iex "net stop $serviceName"
-    & $instsrv $serviceName remove
+    iex "net stop $ServiceName"
+    & $instsrv $ServiceName remove
 }
 
 if($Uninstall.IsPresent){
@@ -56,14 +59,14 @@ Write-Host "Installing service"
 
 $srvany = (gci $srvany).FullName
 
-& $instsrv $serviceName "`"$srvany`""
+& $instsrv $ServiceName "`"$srvany`""
 
-$regParamsPath = "HKLM:\System\CurrentControlSet\Services\$serviceName\Parameters" 
+$regParamsPath = "HKLM:\System\CurrentControlSet\Services\$ServiceName\Parameters" 
 New-Item -Path $regParamsPath
 New-ItemProperty -Path $regParamsPath -Name AppDirectory -PropertyType String -Value $fitnesseDir
 New-ItemProperty -Path $regParamsPath -Name Application -PropertyType String -Value $java_exe
-New-ItemProperty -Path $regParamsPath -Name AppParameters -PropertyType String -Value "-jar $fitnesseJar -p $finessePort"
+New-ItemProperty -Path $regParamsPath -Name AppParameters -PropertyType String -Value "-jar $fitnesseJar -p $FinessePort"
 
-iex "net start $serviceName"
+iex "net start $ServiceName"
 
-Write-Host "Fitnesse should be availale at http://localhost:$finessePort"
+Write-Host "Fitnesse should be available at http://localhost:$FinessePort"
